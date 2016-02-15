@@ -3,11 +3,13 @@ package main
 import (
 	"crypto/rand"
 	"github.com/caleblloyd/ssemux-server/ssemux"
-	"github.com/gorilla/context"
-	"github.com/gorilla/mux"
+	"github.com/go-ozzo/ozzo-routing"
+//	"github.com/go-ozzo/ozzo-routing/access"
+//	"github.com/go-ozzo/ozzo-routing/slash"
+//	"github.com/go-ozzo/ozzo-routing/fault"
 	"github.com/gorilla/sessions"
-	"golang.org/x/net/http2"
-	"log"
+//	"golang.org/x/net/http2"
+//	"log"
 	"math/big"
 	"net/http"
 	"time"
@@ -15,15 +17,14 @@ import (
 	"fmt"
 )
 
-const CONTEXT_KEY = 0
+const STREAM_CONTEXT_KEY = "ssemux-stream"
 const SESSION_NAME = "sse"
 
-func SessionHandler(cs *sessions.CookieStore, next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		session, err := cs.Get(r, SESSION_NAME)
+func SessionMiddleware(cs *sessions.CookieStore) routing.Handler {
+	return func(c *routing.Context) error {
+		session, err := cs.Get(c.Request, SESSION_NAME)
 		if err != nil {
-			http.Error(w, err.Error(), 500)
-			return
+			return routing.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
 		if session.IsNew {
 			randId, _ := rand.Int(rand.Reader, big.NewInt(100000))
@@ -31,26 +32,25 @@ func SessionHandler(cs *sessions.CookieStore, next http.Handler) http.Handler {
 			session.Values["id"] = randId.String()
 			session.Values["uid"] = randInt.String()
 		}
-		session.Save(r, w)
-		next.ServeHTTP(w, r)
-	})
+		session.Save(c.Request, c.Response)
+		return nil
+	}
 }
 
-func StreamGenHandler(cs *sessions.CookieStore, ss *ssemux.Store, next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func StreamCreateMiddleware(cs *sessions.CookieStore, ss *ssemux.Store) routing.Handler {
+	return func(c *routing.Context) error {
 		// Get a session. We're ignoring the error resulted from decoding an
 		// existing session: Get() always returns a session, even if empty.
-		session, err := cs.Get(r, SESSION_NAME)
+		session, err := cs.Get(c.Request, SESSION_NAME)
 		if err != nil {
-			http.Error(w, err.Error(), 500)
-			return
+			return routing.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
-		fmt.Println(session.Values["id"].(string))
-		fmt.Println(session.Values["uid"].(string))
-		context.Set(r, CONTEXT_KEY, ss.New(session.ID))
-		ss.Associate(session.ID, "uid", session.Values["uid"].(string))
-		next.ServeHTTP(w, r)
-	})
+		fmt.Println("id:  " + session.Values["id"].(string))
+		fmt.Println("uid: " + session.Values["uid"].(string))
+		c.Set(STREAM_CONTEXT_KEY, ss.New(session.Values["id"].(string)))
+		ss.Associate(session.Values["id"].(string), "uid", session.Values["uid"].(string))
+		return nil
+	}
 }
 
 func main() {
@@ -70,15 +70,34 @@ func main() {
 				})
 			}
 		}
-
 	}()
 
-	r := mux.NewRouter()
-	r.Handle("/sse", SessionHandler(cs, StreamGenHandler(cs, ss, ssemux.Handler(CONTEXT_KEY))))
-	s := &http.Server{
-		Addr:    ":8080",
-		Handler: r,
-	}
-	http2.ConfigureServer(s, &http2.Server{})
-	log.Fatal(s.ListenAndServe())
+	r := routing.New()
+//	r.Use(
+//		access.Logger(log.Printf),
+//		slash.Remover(http.StatusMovedPermanently),
+//		fault.Recovery(log.Printf),
+//
+//	)
+	sse := r.Group("/sse")
+	sse.Use(
+		SessionMiddleware(cs),
+		StreamCreateMiddleware(cs, ss),
+	)
+	sse.Get("/test", func(c *routing.Context) error {
+		s := c.Get(STREAM_CONTEXT_KEY).(*ssemux.Stream)
+		if (s == nil){
+			return routing.NewHTTPError(http.StatusInternalServerError, "could not find stream in context")
+		}
+		s.Handle(c.Response)
+		return nil
+	})
+//	s := &http.Server{
+//		Addr:    ":8080",
+//		Handler: r,
+//	}
+//	http2.ConfigureServer(s, &http2.Server{})
+//	log.Fatal(s.ListenAndServe())
+	http.Handle("/", r)
+	http.ListenAndServe(":8080", nil)
 }

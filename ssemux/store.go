@@ -92,7 +92,7 @@ func (ma *MultiAssoc) Disassociate(key string, assocKey string) {
 type Store struct {
 	closedCh     chan string
 	multiAssoc   map[string]*MultiAssoc
-	multiAssocMu *sync.Mutex
+	multiAssocMu *sync.RWMutex
 	resetMu      *sync.Mutex
 	syncStream   map[string]*SyncStream
 }
@@ -101,7 +101,7 @@ func NewStore() *Store {
 	return &Store{
 		closedCh:     make(chan string, CLOSED_CH_BUFFER),
 		multiAssoc:   make(map[string]*MultiAssoc),
-		multiAssocMu: &sync.Mutex{},
+		multiAssocMu: &sync.RWMutex{},
 		resetMu:      &sync.Mutex{},
 		syncStream:   make(map[string]*SyncStream),
 	}
@@ -140,7 +140,9 @@ func (s *Store) New(key string) *Stream {
 }
 
 func (s *Store) Event(assoc string, assocKey string, event *Event){
+	s.multiAssocMu.RLock()
 	ma, exists := s.multiAssoc[assoc]
+	s.multiAssocMu.RUnlock()
 	if (exists){
 		ma.Event(assocKey, event)
 	}
