@@ -63,7 +63,9 @@ func (ma *MultiAssoc) Event(assocKey string, event *Event) {
 	assoc, exists := ma.syncStream[assocKey]
 	if exists{
 		for _, v := range assoc {
-			v.Event(event)
+			if (v.key != event.Source){
+				v.Event(event)
+			}
 		}
 	}
 	ma.rwmu.RUnlock()

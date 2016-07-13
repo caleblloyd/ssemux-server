@@ -12,10 +12,14 @@ const HEARTBEAT_INTERVAL = time.Second * 15
 const CLOSE_EVENT_FLAG = 0x1
 
 type Event struct{
+	// SSE fields
 	Comment       string
 	Id            string
 	Event 		  string
 	Data    	  string
+	// sender source to exclude from dissemination
+	Source		  string
+	// internal flags
 	Flag          int
 }
 
@@ -70,7 +74,7 @@ func (s *Stream) Handle(w http.ResponseWriter) {
 				b = append(b, []byte("id:" + e.Id + "\r\n")...)
 			}
 			if e.Event != ""{
-				b = append(b, []byte("id:" + e.Event + "\r\n")...)
+				b = append(b, []byte("event:" + e.Event + "\r\n")...)
 			}
 			if e.Data != ""{
 				b = append(b, prefixLines("data:", strings.NewReader(e.Data))...)
