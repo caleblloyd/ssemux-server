@@ -61,9 +61,9 @@ func NewMultiAssoc() *MultiAssoc {
 func (ma *MultiAssoc) Event(assocKey string, event *Event) {
 	ma.rwmu.RLock()
 	assoc, exists := ma.syncStream[assocKey]
-	if exists{
+	if exists {
 		for _, v := range assoc {
-			if (v.key != event.Source){
+			if v.key != event.Source {
 				v.Event(event)
 			}
 		}
@@ -74,7 +74,7 @@ func (ma *MultiAssoc) Event(assocKey string, event *Event) {
 func (ma *MultiAssoc) Associate(key string, assocKey string, syncStream *SyncStream) {
 	ma.rwmu.Lock()
 	assoc, exists := ma.syncStream[assocKey]
-	if !exists{
+	if !exists {
 		assoc = make(map[string]*SyncStream)
 		ma.syncStream[assocKey] = assoc
 	}
@@ -85,7 +85,7 @@ func (ma *MultiAssoc) Associate(key string, assocKey string, syncStream *SyncStr
 func (ma *MultiAssoc) Disassociate(key string, assocKey string) {
 	ma.rwmu.Lock()
 	_, exists := ma.syncStream[assocKey]
-	if exists{
+	if exists {
 		delete(ma.syncStream[assocKey], key)
 	}
 	ma.rwmu.Unlock()
@@ -141,11 +141,11 @@ func (s *Store) New(key string) *Stream {
 	return stream
 }
 
-func (s *Store) Event(assoc string, assocKey string, event *Event){
+func (s *Store) Event(assoc string, assocKey string, event *Event) {
 	s.multiAssocMu.RLock()
 	ma, exists := s.multiAssoc[assoc]
 	s.multiAssocMu.RUnlock()
-	if (exists){
+	if exists {
 		ma.Event(assocKey, event)
 	}
 }

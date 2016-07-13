@@ -4,17 +4,17 @@ import (
 	"crypto/rand"
 	"github.com/caleblloyd/ssemux-server/ssemux"
 	"github.com/go-ozzo/ozzo-routing"
-//	"github.com/go-ozzo/ozzo-routing/access"
-//	"github.com/go-ozzo/ozzo-routing/slash"
-//	"github.com/go-ozzo/ozzo-routing/fault"
+	//	"github.com/go-ozzo/ozzo-routing/access"
+	//	"github.com/go-ozzo/ozzo-routing/slash"
+	//	"github.com/go-ozzo/ozzo-routing/fault"
 	"github.com/gorilla/sessions"
-//	"golang.org/x/net/http2"
-//	"log"
+	//	"golang.org/x/net/http2"
+	//	"log"
+	"fmt"
 	"math/big"
 	"net/http"
-	"time"
 	"strconv"
-	"fmt"
+	"time"
 )
 
 const STREAM_CONTEXT_KEY = "ssemux-stream"
@@ -58,27 +58,27 @@ func main() {
 	cs := sessions.NewCookieStore([]byte("something-very-secret"))
 	ss := ssemux.NewStore()
 
-	go func(){
+	go func() {
 		for {
-			<- time.After(time.Second)
-			for i:=int64(0); i<3; i++{
+			<-time.After(time.Second)
+			for i := int64(0); i < 3; i++ {
 				iStr := strconv.FormatInt(i, 10)
 				ss.Event("uid", iStr, &ssemux.Event{
 					Comment: "test",
-					Event: "yo",
-					Data: "hi from "+iStr,
+					Event:   "yo",
+					Data:    "hi from " + iStr,
 				})
 			}
 		}
 	}()
 
 	r := routing.New()
-//	r.Use(
-//		access.Logger(log.Printf),
-//		slash.Remover(http.StatusMovedPermanently),
-//		fault.Recovery(log.Printf),
-//
-//	)
+	//	r.Use(
+	//		access.Logger(log.Printf),
+	//		slash.Remover(http.StatusMovedPermanently),
+	//		fault.Recovery(log.Printf),
+	//
+	//	)
 	sse := r.Group("/sse")
 	sse.Use(
 		SessionMiddleware(cs),
@@ -86,18 +86,18 @@ func main() {
 	)
 	sse.Get("/test", func(c *routing.Context) error {
 		s := c.Get(STREAM_CONTEXT_KEY).(*ssemux.Stream)
-		if (s == nil){
+		if s == nil {
 			return routing.NewHTTPError(http.StatusInternalServerError, "could not find stream in context")
 		}
 		s.Handle(c.Response)
 		return nil
 	})
-//	s := &http.Server{
-//		Addr:    ":8080",
-//		Handler: r,
-//	}
-//	http2.ConfigureServer(s, &http2.Server{})
-//	log.Fatal(s.ListenAndServe())
+	//	s := &http.Server{
+	//		Addr:    ":8080",
+	//		Handler: r,
+	//	}
+	//	http2.ConfigureServer(s, &http2.Server{})
+	//	log.Fatal(s.ListenAndServe())
 	http.Handle("/", r)
 	http.ListenAndServe(":8080", nil)
 }

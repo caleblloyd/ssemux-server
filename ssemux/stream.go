@@ -1,41 +1,41 @@
 package ssemux
 
-import(
-	"net/http"
-	"time"
-	"strings"
+import (
 	"fmt"
+	"net/http"
+	"strings"
+	"time"
 )
 
 const EVENT_CH_BUFFER = 16
 const HEARTBEAT_INTERVAL = time.Second * 15
 const CLOSE_EVENT_FLAG = 0x1
 
-type Event struct{
+type Event struct {
 	// SSE fields
-	Comment       string
-	Id            string
-	Event 		  string
-	Data    	  string
+	Comment string
+	Id      string
+	Event   string
+	Data    string
 	// sender source to exclude from dissemination
-	Source		  string
+	Source string
 	// internal flags
-	Flag          int
+	Flag int
 }
 
 func NewCloseEvent() *Event {
 	return &Event{
 		Event: "close",
-		Data: "true",
-		Flag: CLOSE_EVENT_FLAG,
+		Data:  "true",
+		Flag:  CLOSE_EVENT_FLAG,
 	}
 }
 
-type Stream struct{
-	key       string
-	closedCh  chan string
-	EventCh   chan *Event
-	ResetCh   chan bool
+type Stream struct {
+	key      string
+	closedCh chan string
+	EventCh  chan *Event
+	ResetCh  chan bool
 }
 
 func NewStream(key string, closedCh chan string) *Stream {
@@ -53,41 +53,41 @@ func (s *Stream) Handle(w http.ResponseWriter) {
 	w.WriteHeader(http.StatusOK)
 	w.(http.Flusher).Flush()
 
-//		fmt.Fprintf(w, ": ~2KB of junk to force browsers to start rendering immediately:\r\n")
-//		io.WriteString(w, strings.Repeat(": xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\r\n", 32))
-//		w.(http.Flusher).Flush()
+	//		fmt.Fprintf(w, ": ~2KB of junk to force browsers to start rendering immediately:\r\n")
+	//		io.WriteString(w, strings.Repeat(": xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\r\n", 32))
+	//		w.(http.Flusher).Flush()
 
 	var b []byte
 	var e *Event
-	for{
-		select{
-		case <- closeNotify:
+	for {
+		select {
+		case <-closeNotify:
 			s.closedCh <- s.key
 			return
-		case e = <- s.EventCh:
+		case e = <-s.EventCh:
 			fmt.Println(e)
 			b = make([]byte, 0)
-			if e.Comment != ""{
+			if e.Comment != "" {
 				b = append(b, prefixLines(":", strings.NewReader(e.Comment))...)
 			}
-			if e.Id != ""{
-				b = append(b, []byte("id:" + e.Id + "\r\n")...)
+			if e.Id != "" {
+				b = append(b, []byte("id:"+e.Id+"\r\n")...)
 			}
-			if e.Event != ""{
-				b = append(b, []byte("event:" + e.Event + "\r\n")...)
+			if e.Event != "" {
+				b = append(b, []byte("event:"+e.Event+"\r\n")...)
 			}
-			if e.Data != ""{
+			if e.Data != "" {
 				b = append(b, prefixLines("data:", strings.NewReader(e.Data))...)
 			}
 			b = append(b, []byte("\r\n")...)
 			w.Write(b)
 			w.(http.Flusher).Flush()
-			if (e.Flag & CLOSE_EVENT_FLAG == CLOSE_EVENT_FLAG){
+			if e.Flag&CLOSE_EVENT_FLAG == CLOSE_EVENT_FLAG {
 				return
 			}
-		case <- s.ResetCh:
+		case <-s.ResetCh:
 			s.EventCh <- NewCloseEvent()
-		case <- time.After(HEARTBEAT_INTERVAL):
+		case <-time.After(HEARTBEAT_INTERVAL):
 			s.EventCh <- &Event{
 				Comment: "heartbeat",
 			}
